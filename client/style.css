@@ -241,3 +241,6 @@ body.driving #minimap { bottom: 110px; }
   #hud .money { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { #hud .star.on, .note, .helpbox, .cashpop { animation: none; } }
+
+/* ---------------------------------------------------------------- first person */
+body.fpv::after { content: ''; position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -5px 0 0 -5px; border: 2px solid var(--cream); border-radius: 50%; box-shadow: 0 0 0 1px var(--ink); pointer-events: none; z-index: 20; }

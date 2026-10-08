@@ -390,7 +390,13 @@ export class Game {
       if (this.job) this.net.send({ t: 'job', a: 'cancel' });
       else if (L.car && VEHICLES[L.car.model].key === 'taxi') this.net.send({ t: 'job', a: 'taxi' });
     }
-    if (input.hit('zoom')) this.settings.zoomOut = !this.settings.zoomOut;
+    if (input.hit('zoom')) {
+      // C cycles first person, top-down, zoomed-out top-down
+      if (this.settings.fpv !== false) { this.settings.fpv = false; this.settings.zoomOut = false; }
+      else if (!this.settings.zoomOut) this.settings.zoomOut = true;
+      else { this.settings.fpv = true; this.settings.zoomOut = false; }
+      this.ui.saveSettings();
+    }
     this.voice.setTransmit(input.is('talk'));
   }
 
@@ -439,6 +445,11 @@ export class Game {
     const L = this.local;
     const cam = this.cam;
     const car = L.car;
+    cam.fpv = this.settings.fpv !== false;
+    this.input.wantLock = cam.fpv && !this.ui.blocking;
+    if (!cam.fpv && document.pointerLockElement) document.exitPointerLock();
+    document.body.classList.toggle('fpv', cam.fpv && !this.ui.blocking);
+    if (cam.fpv) return this.updateFpvCamera(dt);
     const vx = car ? car.vx : L.vx, vy = car ? car.vy : L.vy;
     const spd = Math.hypot(vx, vy);
     let zT = 1;
@@ -469,6 +480,31 @@ export class Game {
     cam.shakeY = 8 * sh * n(2) + this.kickV[1];
     cam.shakeA = (2.5 * Math.PI / 180) * sh * n(3) * 0.5;
     this.kickV[0] *= Math.exp(-dt * 20); this.kickV[1] *= Math.exp(-dt * 20);
+  }
+
+  updateFpvCamera(dt) {
+    const L = this.local, cam = this.cam, car = L.car, m = this.input.mouse;
+    if (!this.ui.blocking) {
+      cam.pitch = clamp(cam.pitch - m.dy * 0.0025, -1.3, 0.6);
+      if (!car) cam.yaw += m.dx * 0.0025;
+    }
+    if (car) {
+      // hood cam: the view swings with the car, the mouse still nudges the pitch
+      const md = VEHICLES[car.model];
+      cam.yaw += Math.atan2(Math.sin(car.a - cam.yaw), Math.cos(car.a - cam.yaw)) * (1 - Math.exp(-dt * 12));
+      cam.x = car.x + Math.cos(car.a) * md.len * 0.1;
+      cam.y = car.y + Math.sin(car.a) * md.len * 0.1;
+      cam.eyeZ = md.ht + (md.bike ? 9 : 4);
+    } else {
+      const bob = L.moving ? Math.sin(this.time * 11) * 0.6 : 0;
+      cam.x = L.x; cam.y = L.y;
+      cam.eyeZ = (L.swim ? 6 : L.mode === 'ko' ? 3 : 13) + bob;
+    }
+    this.trauma = Math.max(0, this.trauma - dt * 1.5);
+    const sh = this.trauma * this.trauma;
+    cam.shakeX = 3 * sh * (valueNoise(this.time * 18, 1, 3) - 0.5);
+    cam.shakeY = 3 * sh * (valueNoise(this.time * 18, 2, 3) - 0.5);
+    cam.shakeA = 0;
   }
 
   render(dt, visDt) {

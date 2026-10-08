@@ -648,11 +648,17 @@ uniform float uWet;
 uniform float uFlash;
 uniform float uNight;
 uniform vec2 uShadowSize;
+uniform vec4 uFog;             // eye xyz, range (0 = top-down, no fog)
 out vec4 oCol;
+vec3 skyColor() {
+  vec3 horizon = uAmbient * 1.5 + uSunCol * 0.45;
+  vec3 zenith = uAmbient * vec3(0.7, 0.85, 1.25);
+  return mix(horizon, zenith, smoothstep(0.35, 1.0, vUV.y)) + vec3(0.9, 0.95, 1.1) * uFlash * 0.6;
+}
 void main() {
   vec4 alb = texture(uAlbedo, vUV);
   float d = texture(uDepth, vUV).r;
-  if (d >= 0.99999) { oCol = vec4(0.05, 0.08, 0.12, 1.0); return; }
+  if (d >= 0.99999) { oCol = vec4(uFog.w > 0.0 ? skyColor() : vec3(0.05, 0.08, 0.12), 1.0); return; }
   vec3 p = worldFromDepth(vUV, d);
   int code = int(alb.a * 255.0 + 0.5);
   vec3 emis = texture(uEmis, vUV).rgb;
@@ -693,6 +699,7 @@ void main() {
     col += refl * (0.25 * uWet + 0.6 * puddle);
     col = mix(col, uAmbient * 0.5, 0.12 * puddle);
   }
+  if (uFog.w > 0.0) col = mix(col, skyColor(), smoothstep(uFog.w * 0.45, uFog.w, distance(p, uFog.xyz)));
   oCol = vec4(col, 1.0);
 }
 `;

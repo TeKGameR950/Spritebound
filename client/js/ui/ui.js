@@ -563,7 +563,7 @@ export class UI {
         <span><span class="kbd">N</span></span><span>Radio station</span>
         <span><span class="kbd">V</span></span><span>Push to talk (proximity voice)</span>
         <span><span class="kbd">T</span></span><span>Chat · <span class="kbd">Tab</span> players · <span class="kbd">B</span> wave</span>
-        <span><span class="kbd">M</span></span><span>Map · <span class="kbd">G</span> call your car · <span class="kbd">C</span> zoom</span>
+        <span><span class="kbd">M</span></span><span>Map · <span class="kbd">G</span> call your car · <span class="kbd">C</span> camera: first person, top-down, zoomed out</span>
         <span><span class="kbd">J</span></span><span>Start or quit a taxi shift</span>
       </div>
       <h3>Things to do</h3>

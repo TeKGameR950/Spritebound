@@ -67,7 +67,7 @@ On any other host you need HTTPS (see [Deploying](#deploying)).
 | G | Call your car |
 | J | Start or quit a taxi shift |
 | B | Wave |
-| C | Zoom out |
+| C | Camera: first person, top-down, zoomed-out top-down |
 | Esc | Menu, settings, passive mode |
 
 Chat commands: `/help`, `/passive on|off`, `/stuck`, `/players`, `/time`.

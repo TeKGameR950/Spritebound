@@ -614,7 +614,8 @@ export class Game {
       case 'car': {
         const model = VEH_ID[args[0]] ?? VEH_ID.sports;
         const c = Math.cos(p.a), s = Math.sin(p.a);
-        const v = this.spawnVehicle(model, p.x + c * 34, p.y + s * 34, p.a, { kind: 'parked', color: Math.floor(Math.random() * PAINTS.length) });
+        const spot = this.freeSpotNear(p.x + c * 34, p.y + s * 34) || [p.x, p.y];
+        const v = this.spawnVehicle(model, spot[0], spot[1], p.a, { kind: 'parked', color: Math.floor(Math.random() * PAINTS.length) });
         this.sendTo(p, { t: 'devcar', v: v.id });
         return true;
       }

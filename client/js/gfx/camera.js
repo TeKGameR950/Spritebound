@@ -3,12 +3,15 @@ import { mat4 } from './gl.js';
 // Perspective top-down camera. World: x right, y down, z up. The view matrix includes a
 // reflection (y down on screen with z toward the viewer), so face culling stays disabled.
 export const PERSPECTIVE = 3.3;
+export const FPV_RANGE = 900;
 
 export class Camera {
   constructor() {
     this.x = 0; this.y = 0;
     this.zoom = 1;
     this.tilt = 0;
+    this.fpv = false;
+    this.yaw = 0; this.pitch = -0.12; this.eyeZ = 13;
     this.baseViewH = 340;
     this.shakeX = 0; this.shakeY = 0; this.shakeA = 0;
     this.proj = new Float32Array(16);
@@ -29,6 +32,7 @@ export class Camera {
   get viewW() { return this.viewH * (this.w / this.h); }
 
   update() {
+    if (this.fpv) return this.updateFpv();
     const half = this.viewH / 2;
     const Hc = half * PERSPECTIVE;
     const fov = 2 * Math.atan(1 / PERSPECTIVE);
@@ -51,6 +55,28 @@ export class Camera {
     this.near = Math.max(4, Hc * 0.05);
     this.far = Hc * 1.3 + 200;
     mat4.perspective(this.proj, fov, this.w / this.h, this.near, this.far);
+    mat4.mul(this.vp, this.proj, this.view);
+    mat4.invert(this.inv, this.vp);
+  }
+
+  // First person: eye at (x, y, eyeZ) looking along yaw and pitch. Same handedness as the top-down view.
+  updateFpv() {
+    const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const f = [cy * cp, sy * cp, sp];
+    const ex = this.x + this.shakeX, ey = this.y + this.shakeY, ez = this.eyeZ;
+    this.eye = [ex, ey, ez];
+    const rl = Math.hypot(f[0], f[1]) || 1;
+    const r = [-f[1] / rl, f[0] / rl, 0];
+    const u = [f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2], f[0] * r[1] - f[1] * r[0]];
+    const bk = [-f[0], -f[1], -f[2]];
+    const V = this.view;
+    V[0] = r[0]; V[4] = r[1]; V[8] = r[2]; V[12] = -(r[0] * ex + r[1] * ey + r[2] * ez);
+    V[1] = u[0]; V[5] = u[1]; V[9] = u[2]; V[13] = -(u[0] * ex + u[1] * ey + u[2] * ez);
+    V[2] = bk[0]; V[6] = bk[1]; V[10] = bk[2]; V[14] = -(bk[0] * ex + bk[1] * ey + bk[2] * ez);
+    V[3] = 0; V[7] = 0; V[11] = 0; V[15] = 1;
+    this.near = 1.5;
+    this.far = FPV_RANGE * 1.6;
+    mat4.perspective(this.proj, 74 * Math.PI / 180, this.w / this.h, this.near, this.far);
     mat4.mul(this.vp, this.proj, this.view);
     mat4.invert(this.inv, this.vp);
   }
@@ -83,6 +109,8 @@ export class Camera {
   }
   // Axis-aligned bounds of the visible ground plane.
   groundBounds(margin = 0) {
+    // screen corners above the horizon never hit the ground, so first person culls by range instead
+    if (this.fpv) return [this.x - FPV_RANGE - margin, this.y - FPV_RANGE - margin, this.x + FPV_RANGE + margin, this.y + FPV_RANGE + margin];
     const pts = [this.screenToWorld(0, 0), this.screenToWorld(this.w, 0), this.screenToWorld(0, this.h), this.screenToWorld(this.w, this.h)];
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }

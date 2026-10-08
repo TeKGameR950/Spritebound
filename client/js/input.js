@@ -31,7 +31,8 @@ export class Input {
     this.binds = structuredClone(DEFAULT_BINDS);
     this.down = new Set();
     this.pressed = new Set();
-    this.mouse = { x: 0, y: 0, left: false, right: false, leftPressed: false, rightPressed: false, wheel: 0, moved: false };
+    this.mouse = { x: 0, y: 0, dx: 0, dy: 0, left: false, right: false, leftPressed: false, rightPressed: false, wheel: 0, moved: false };
+    this.wantLock = false;
     this.enabled = true;
     this.gamepad = null;
     this.usingPad = false;
@@ -46,8 +47,13 @@ export class Input {
     });
     addEventListener('keyup', (e) => this.down.delete(e.code));
     addEventListener('blur', () => { this.down.clear(); this.mouse.left = this.mouse.right = false; });
-    target.addEventListener('mousemove', (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.moved = true; this.lastDevice = 'kb'; });
+    target.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement === target) { this.mouse.dx += e.movementX; this.mouse.dy += e.movementY; }
+      else { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
+      this.mouse.moved = true; this.lastDevice = 'kb';
+    });
     target.addEventListener('mousedown', (e) => {
+      if (this.wantLock && document.pointerLockElement !== target) target.requestPointerLock?.();
       if (e.button === 0) { this.mouse.left = true; this.mouse.leftPressed = true; }
       if (e.button === 2) { this.mouse.right = true; this.mouse.rightPressed = true; }
       this.lastDevice = 'kb';
@@ -139,6 +145,7 @@ export class Input {
     this.mouse.leftPressed = false;
     this.mouse.rightPressed = false;
     this.mouse.wheel = 0;
+    this.mouse.dx = 0; this.mouse.dy = 0;
     this.mouse.moved = false;
   }
 }

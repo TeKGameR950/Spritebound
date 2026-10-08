@@ -4,6 +4,7 @@ import { Atlas } from './atlas.js';
 import { SpriteBank, InstanceWriter, setupSpriteAttribs, INST_BYTES } from './sprites.js';
 import { WorldGfx } from './world-gfx.js';
 import { MarkRing, DVERT } from './decals.js';
+import { FPV_RANGE } from './camera.js';
 
 export const LIGHT_FLOATS = 12;
 export const PART_FLOATS = 16;
@@ -357,6 +358,8 @@ export class Renderer {
     gl.uniform1f(p.u.uFlash, s.flash || 0);
     gl.uniform1f(p.u.uNight, tod.night);
     gl.uniform2f(p.u.uShadowSize, T.shadow.w, T.shadow.h);
+    if (cam.fpv) gl.uniform4f(p.u.uFog, cam.eye[0], cam.eye[1], cam.eye[2], FPV_RANGE * 0.95);
+    else gl.uniform4f(p.u.uFog, 0, 0, 0, 0);
     gl.bindVertexArray(this.fsVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 

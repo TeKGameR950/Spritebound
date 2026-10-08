@@ -81,7 +81,7 @@ export class SceneBuilder {
     const night = tod.streetLights;
 
     // ---------------------------------------------------------------- local player
-    if (L.mode === 'walk' || L.mode === 'ko') {
+    if ((L.mode === 'walk' || L.mode === 'ko') && !g.cam.fpv) {
       const w = WEAPONS[L.weapon];
       const upper = this.upperFor(w.key, { punch: L.anim.punch, swing: L.anim.swing, throw: L.anim.throw, wave: L.anim.wave, aiming: L.aimingT > 0, moving: L.moving, phase: L.anim.phase });
       const lower = L.moving ? WALK_FRAMES[Math.floor(L.anim.phase) % 4] : 'idle';
@@ -181,7 +181,7 @@ export class SceneBuilder {
       const c = L.car;
       const start = dyn.n;
       drawVehicle(c.id, c.model, c.color, c.x, c.y, c.a, c.flags | 0, c.hp, false, g.app, c.vx, c.vy, c.slip);
-      if (dyn.n > start) this.xray.push({ s: start, e: dyn.n, c: XRAY_SELF });
+      if (dyn.n > start && !g.cam.fpv) this.xray.push({ s: start, e: dyn.n, c: XRAY_SELF });
     }
 
     // ---------------------------------------------------------------- items

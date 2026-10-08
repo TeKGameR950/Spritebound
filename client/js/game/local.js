@@ -99,6 +99,13 @@ export class Local {
     const cw = g.cw;
     let [mx, my] = input.move();
     if (g.ui.blocking) { mx = 0; my = 0; }
+    const fpv = g.cam.fpv;
+    if (fpv) {
+      // W walks where you look, A and D strafe
+      const yaw = g.cam.yaw, fwd = -my, side = mx;
+      mx = fwd * Math.cos(yaw) - side * Math.sin(yaw);
+      my = fwd * Math.sin(yaw) + side * Math.cos(yaw);
+    }
     const terr = cw.terrainInfo(this.x, this.y);
     const running = input.is('run') && !g.ui.blocking;
     let speed = (running ? RUN : WALK) * (terr.walk || 1);
@@ -133,7 +140,11 @@ export class Local {
     const padAim = input.padAim();
     const w = this.w;
     let aiming = false;
-    if (padAim !== null) { this.aim = padAim; aiming = true; this.aimingT = 0.6; }
+    if (fpv) {
+      this.aim = g.cam.yaw;
+      this.a = g.cam.yaw;
+      if (w.kind !== 'melee' || input.mouse.left || input.mouse.right) aiming = true;
+    } else if (padAim !== null) { this.aim = padAim; aiming = true; this.aimingT = 0.6; }
     else if (input.lastDevice === 'kb') {
       const [wx, wy] = g.cam.screenToWorld(input.mouse.x, input.mouse.y, 10);
       this.aim = Math.atan2(wy - this.y, wx - this.x);
@@ -398,8 +409,11 @@ export class Local {
     // drive-by: pistol/smg toward the mouse
     const w = this.w;
     if ((w.key === 'pistol' || w.key === 'smg') && !g.ui.blocking) {
-      const [wx, wy] = g.cam.screenToWorld(input.mouse.x, input.mouse.y, 10);
-      this.aim = Math.atan2(wy - c.y, wx - c.x);
+      if (g.cam.fpv) this.aim = g.cam.yaw;
+      else {
+        const [wx, wy] = g.cam.screenToWorld(input.mouse.x, input.mouse.y, 10);
+        this.aim = Math.atan2(wy - c.y, wx - c.x);
+      }
       const trigger = input.mouse.left;
       if ((w.auto ? trigger : input.mouse.leftPressed) && this.fireT <= 0 && this.reloadT <= 0 && this.clipOf(w) > 0) this.fire(w);
     }
