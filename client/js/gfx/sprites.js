@@ -19,6 +19,8 @@ export class SpriteBank {
     const def = { key, w: sl.w, d: sl.d, h: sl.h, slices: [], canopyZ: opts.canopyZ ?? 999, mat: opts.mat ?? 2, flat: !!opts.flat };
     for (const s of sl.slices) {
       if (!s.any) continue;
+      if (opts.zMin !== undefined && s.z < opts.zMin) continue;
+      if (opts.zMax !== undefined && s.z >= opts.zMax) continue;
       const px = s.px;
       // alpha carries the emissive code; dilate colours into transparent texels to avoid dark fringes
       for (let i = 0; i < s.em.length; i++) {

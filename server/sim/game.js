@@ -9,7 +9,7 @@ import { PROP_DEF } from '../../shared/props.js';
 import { Storage } from '../storage.js';
 import { Traffic } from './traffic.js';
 import { Peds } from './peds.js';
-import { Police } from './police.js';
+import { Police, STAR_HEAT } from './police.js';
 import { Combat } from './combat.js';
 import { Jobs } from './jobs.js';
 import { Voice } from './voice.js';
@@ -287,7 +287,7 @@ export class Game {
       mode: MODE.WALK, vehicle: 0, weapon: 0, flags: 0, hp: 100, alive: true, wanted: 0, heat: 0, lastSeen: 0,
       passive: this.config.pvp ? profile.passive !== false : true, ready: true, lastState: this.now, tp: 1, info: 1,
       known: { p: new Map(), v: new Map(), n: new Map() }, lastFire: {}, firingT: 0, spawnShield: this.now + 4,
-      joinedAt: this.now, voiceOn: false, talking: false, chatT: 0, job: null, lastPvp: 0,
+      joinedAt: this.now, voiceOn: false, talking: false, chatT: -1, job: null, lastPvp: 0,
     };
     c.player = p;
     this.players.set(id, p);
@@ -596,9 +596,57 @@ export class Game {
         return;
       }
       case 'players': return this.notify(p, [...this.players.values()].filter((q) => q.ready).map((q) => q.name).join(', '), 'info');
-      case 'time': return this.notify(p, `It is ${String(Math.floor(this.hour)).padStart(2, '0')}:${String(Math.floor((this.hour % 1) * 60)).padStart(2, '0')} in Haven Bay.`, 'info');
-      default: return this.notify(p, 'Unknown command. Try /help', 'warn');
+      case 'time': if (!this.config.dev || !args.length) return this.notify(p, `It is ${String(Math.floor(this.hour)).padStart(2, '0')}:${String(Math.floor((this.hour % 1) * 60)).padStart(2, '0')} in Haven Bay.`, 'info');
     }
+    if (this.config.dev && this.devCommand(p, cmd.toLowerCase(), args)) return;
+    this.notify(p, 'Unknown command. Try /help', 'warn');
+  }
+
+  devCommand(p, cmd, args) {
+    const n = args.map(Number);
+    switch (cmd) {
+      case 'tp':
+        if (p.vehicle || !Number.isFinite(n[0]) || !Number.isFinite(n[1])) return true;
+        this.correct(p, n[0] * TILE + TILE / 2, n[1] * TILE + TILE / 2);
+        return true;
+      case 'car': {
+        const model = VEH_ID[args[0]] ?? VEH_ID.sports;
+        const c = Math.cos(p.a), s = Math.sin(p.a);
+        const v = this.spawnVehicle(model, p.x + c * 34, p.y + s * 34, p.a, { kind: 'parked', color: Math.floor(Math.random() * PAINTS.length) });
+        this.sendTo(p, { t: 'devcar', v: v.id });
+        return true;
+      }
+      case 'money':
+        p.profile.money = Math.max(0, n[0] | 0);
+        this.sendMe(p);
+        return true;
+      case 'give': {
+        const w = WEAPONS[WEAPON_ID[args[0]]];
+        if (!w) return true;
+        p.profile.weapons[w.key] = 1;
+        if (w.kind !== 'melee') p.profile.ammo[w.key] = 999;
+        this.sendMe(p);
+        return true;
+      }
+      case 'time':
+        if (!Number.isFinite(n[0])) return true;
+        this.startHour = (((n[0] - (this.now / this.config.dayLength) * 24) % 24) + 24) % 24;
+        this.broadcastWorld();
+        return true;
+      case 'weather': {
+        const preset = { clear: [0.1, 0, 0], cloudy: [0.7, 0, 0], rain: [0.85, 0.9, 0], storm: [0.95, 1, 1] }[args[0]];
+        if (!preset) return true;
+        const [cloud, rain, storm] = preset;
+        Object.assign(this.weather, { cloud, rain, storm, target: { cloud, rain, storm }, next: 600 });
+        this.broadcastWorld();
+        return true;
+      }
+      case 'wanted':
+        p.heat = n[0] > 0 ? STAR_HEAT[clamp(n[0] | 0, 1, 5)] : 0;
+        this.police.refresh(p);
+        return true;
+    }
+    return false;
   }
 
   onPassive(p, on) {

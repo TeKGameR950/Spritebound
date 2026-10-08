@@ -21,4 +21,5 @@ export const config = {
   pedsPerPlayer: num(env.PEDS_PER_PLAYER, 22),
   dayLength: num(env.DAY_LENGTH, 24 * 60),
   trustProxy: bool(env.TRUST_PROXY, false),
+  dev: bool(env.DEV, false),
 };

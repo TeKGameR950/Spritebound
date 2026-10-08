@@ -15,9 +15,9 @@ function fakeWs() {
   const ws = { readyState: 1, sent: [], handlers: {}, send(m) { this.sent.push(m); }, on(k, f) { this.handlers[k] = f; }, close() { this.readyState = 3; } };
   return ws;
 }
-function makeGame() {
+function makeGame(extra = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-'));
-  return new Game(world, { ...baseConfig, dataDir: dir, manualTick: true });
+  return new Game(world, { ...baseConfig, dataDir: dir, manualTick: true, dev: false, ...extra });
 }
 function join(g, name = 'Tester') {
   const ws = fakeWs();
@@ -103,4 +103,26 @@ test('entering a car carjacks the NPC driver and grants driving', () => {
   assert.ok(g.peds.size > pedsBefore, 'driver was not ejected');
   assert.ok(ws.sent.some((m) => typeof m === 'string' && m.includes('"t":"drive"')));
   g.shutdown();
+});
+
+test('dev commands only work on dev servers', () => {
+  const prod = makeGame();
+  const a = join(prod);
+  const money = a.p.profile.money;
+  a.msg({ t: 'chat', m: '/money 99999' });
+  assert.equal(a.p.profile.money, money);
+  prod.shutdown();
+
+  const dev = makeGame({ dev: true });
+  const b = join(dev);
+  b.msg({ t: 'chat', m: '/money 99999' });
+  assert.equal(b.p.profile.money, 99999);
+  dev.step(1);
+  const cars = dev.vehicles.size;
+  b.msg({ t: 'chat', m: '/car taxi' });
+  assert.equal(dev.vehicles.size, cars + 1);
+  dev.step(1);
+  b.msg({ t: 'chat', m: '/time 22' });
+  assert.ok(Math.abs(dev.hour - 22) < 0.01, `hour is ${dev.hour}`);
+  dev.shutdown();
 });

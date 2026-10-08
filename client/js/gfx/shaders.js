@@ -519,18 +519,26 @@ void main() {
   float lxy = max(length(uSunDir.xy), 1e-3);
   vec2 dir = uSunDir.xy / lxy;
   float rise = max(uSunDir.z / lxy, 0.16);
+  // Exact grid traversal (Amanatides & Woo): heights are constant per tile and the ray only climbs,
+  // so testing the ray height where it enters each tile is exact and gives straight shadow edges.
+  vec2 o = p.xy + dir * 1.0;
+  float z0 = p.z + 0.6 + rise;
+  vec2 cell = floor(o / 16.0);
+  vec2 st = vec2(dir.x >= 0.0 ? 1.0 : -1.0, dir.y >= 0.0 ? 1.0 : -1.0);
+  vec2 ad = max(abs(dir), vec2(1e-5));
+  vec2 tDelta = 16.0 / ad;
+  vec2 tMax = ((cell + max(st, 0.0)) * 16.0 - o) * st / ad;
+  float t = 0.0;
   float vis = 1.0;
-  float t = 1.5;
-  p.z += 0.6;
-  for (int i = 0; i < 56; i++) {
-    vec3 q = p + vec3(dir * t, rise * t);
-    if (q.z > 500.0) break;
-    ivec2 tc = ivec2(floor(q.xy / 16.0));
-    if (tc.x < 0 || tc.y < 0 || tc.x >= int(uMapSize.x) || tc.y >= int(uMapSize.y)) break;
-    float h = texelFetch(uHeight, tc, 0).r * 510.0;
-    vis = min(vis, clamp(5.0 * (q.z - h) / t + 1.0, 0.0, 1.0));
+  for (int i = 0; i < 80; i++) {
+    float z = z0 + rise * t;
+    if (z > 510.0) break;
+    if (cell.x < 0.0 || cell.y < 0.0 || cell.x >= uMapSize.x || cell.y >= uMapSize.y) break;
+    float h = texelFetch(uHeight, ivec2(cell), 0).r * 510.0;
+    vis = min(vis, clamp(1.0 + (z - h) / (0.8 + 0.03 * t), 0.0, 1.0));
     if (vis <= 0.0) break;
-    t += max(2.5, t * 0.075);
+    if (tMax.x < tMax.y) { t = tMax.x; tMax.x += tDelta.x; cell.x += st.x; }
+    else { t = tMax.y; tMax.y += tDelta.y; cell.y += st.y; }
   }
   oCol = vec4(vis, 0.0, 0.0, 1.0);
 }
@@ -576,7 +584,7 @@ void main() {
   if (dist > r) discard;
   float x = dist / r;
   float win = clamp(1.0 - x * x * x * x, 0.0, 1.0);
-  float att = win * win / (1.0 + 9.0 * x * x);
+  float att = win * win / (1.0 + 5.0 * x * x);
   if (vCone.z > -1.5) {
     vec2 toP = p.xy - vPos.xy;
     float lt = length(toP);

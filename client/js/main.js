@@ -1,93 +1,209 @@
-// Temporary renderer test harness (replaced by the full game boot).
 import { unpackWorld } from '/shared/worlddata.js';
-import { Renderer, LIGHT_FLOATS } from './gfx/renderer.js';
+import { PROTOCOL_VERSION } from '/shared/constants.js';
+import { randomAppearance, sanitizeAppearance } from '/shared/appearance.js';
+import { Renderer } from './gfx/renderer.js';
 import { Camera } from './gfx/camera.js';
 import { timeOfDay } from './gfx/lighting.js';
 import { InstanceWriter } from './gfx/sprites.js';
-import { buildVehicle } from './gfx/art-vehicles.js';
-import { buildCharacter, SPLIT_Z } from './gfx/art-characters.js';
-import { VEHICLES, PAINTS } from '/shared/vehicles.js';
-import { randomAppearance } from '/shared/appearance.js';
+import { Net } from './net.js';
+import { Input } from './input.js';
+import { AudioEngine } from './audio/audio.js';
+import { VoiceChat } from './voice.js';
+import { UI } from './ui/ui.js';
+import { openCreator, drawPortrait } from './ui/creator.js';
+import { el, esc } from './ui/dom.js';
+import { Game } from './game/game.js';
 
-const q = new URLSearchParams(location.search);
+const TIPS = [
+  'Tip: the handbrake (Space) lets you swing the car around corners.',
+  'Tip: a fresh paint job at a respray garage makes the police forget you.',
+  'Tip: the radio plays the same song for everyone tuned in. Radio parties!',
+  'Tip: Sprites glow at night. They are easier to spot after sunset.',
+  'Tip: hold V to talk to players nearby. Their voices fade with distance.',
+  'Tip: pizza deliveries pay a bonus when they arrive hot.',
+];
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+const settings = Object.assign({ master: 0.8, sfx: 0.9, music: 0.5, ambience: 0.7, voice: 1, shake: 0.7, scale: 1, shadows: true, bloom: true, nametags: true, pocketRadio: false, autoRadio: true, voiceOn: false, voiceMode: 'ptt', hints: true }, store.get('sb_settings', {}));
+const saveSettings = () => store.set('sb_settings', settings);
+
 const canvas = document.getElementById('game');
-const ui = document.getElementById('ui');
-ui.innerHTML = '<div id="dbg" style="position:fixed;left:8px;top:8px;color:#fff;font:12px monospace;text-shadow:1px 1px #000;white-space:pre"></div>';
-const dbg = document.getElementById('dbg');
+const uiRoot = document.getElementById('ui');
+const worldUi = document.getElementById('world-ui');
+
+function loadingScreen() {
+  const l = el('div');
+  l.id = 'loading';
+  l.innerHTML = `<div class="logo">SPRITE<span class="b">BOUND</span></div><div class="bar"><div></div></div><div class="msg">Waking up the city...</div><div class="tip">${TIPS[Math.floor(Math.random() * TIPS.length)]}</div>`;
+  document.body.append(l);
+  return {
+    set(f, msg) { l.querySelector('.bar > div').style.width = Math.round(f * 100) + '%'; if (msg) l.querySelector('.msg').textContent = msg; },
+    done() { l.classList.add('done'); setTimeout(() => l.remove(), 700); },
+    error(msg) { l.querySelector('.msg').innerHTML = `<span style="color:var(--red)">${esc(msg)}</span>`; l.querySelector('.bar').style.display = 'none'; },
+  };
+}
+
+function fatal(msg) {
+  const o = el('div', 'modal-wrap');
+  o.innerHTML = `<div class="panel modal" style="max-width:520px"><h2>Oh no!</h2><p>${esc(msg)}</p></div>`;
+  const b = el('button', 'btn', 'Reload');
+  b.onclick = () => location.reload();
+  o.firstChild.append(b);
+  uiRoot.append(o);
+}
 
 async function boot() {
-  const res = await fetch('/api/world');
-  const world = unpackWorld(await res.json());
-  const r = new Renderer(canvas);
-  await r.initWorld(world, (f, msg) => (dbg.textContent = `${msg} ${(f * 100) | 0}%`));
+  const load = loadingScreen();
+  let renderer;
+  try {
+    renderer = new Renderer(canvas);
+  } catch (e) {
+    load.error('Your browser does not support WebGL2. Try a recent Chrome, Firefox, Edge or Safari.');
+    return;
+  }
+  renderer.quality.scale = settings.scale;
+  renderer.quality.shadows = settings.shadows !== false;
+  renderer.quality.bloom = settings.bloom !== false;
+  load.set(0.02, 'Downloading Haven Bay...');
+  let world;
+  try {
+    const res = await fetch('/api/world');
+    world = unpackWorld(await res.json());
+  } catch (e) {
+    load.error('Could not reach the server. Is it running?');
+    return;
+  }
+  await renderer.initWorld(world, (f, msg) => load.set(0.05 + f * 0.85, msg + '...'));
+  const net = new Net();
+  load.set(0.94, 'Saying hi to the server...');
+  try { await net.connect(); } catch (e) { load.error(e.message); return; }
+  const audio = new AudioEngine();
+  Object.assign(audio.vol, { master: settings.master, sfx: settings.sfx, music: settings.music, ambience: settings.ambience, voice: settings.voice });
+  const voice = new VoiceChat(net, audio);
+  voice.mode = settings.voiceMode || 'ptt';
+  const input = new Input(canvas);
+  const ui = new UI(uiRoot, worldUi, { audio, voice, settings, saveSettings });
+
+  let profile = null;
+  let game = null;
+  net.on('profile', (m) => {
+    profile = m;
+    load.set(1, 'Ready!');
+    load.done();
+    showTitle();
+  });
+  net.on('kick', (m) => fatal(m.m));
+  net.on('close', () => { if (!kicked) fatal('Lost connection to the server. It may be restarting, try again in a moment.'); });
+  let kicked = false;
+  net.on('kick', (m) => { kicked = true; fatal(m.m); });
+  net.send({ t: 'hello', v: PROTOCOL_VERSION, token: store.get('sb_token', null) });
+
+  // ---------------------------------------------------------------- title flyover
   const cam = new Camera();
-  cam.x = Number(q.get('x') || 306 * 16);
-  cam.y = Number(q.get('y') || 262 * 16);
-  cam.zoom = Number(q.get('zoom') || 1);
-  cam.tilt = Number(q.get('tilt') || 0);
-  let hour = Number(q.get('hour') || 15);
-  const freeze = q.has('freeze');
-  const dyn = new InstanceWriter(2048);
-  const lights = new Float32Array(LIGHT_FLOATS * 4096);
-  // test cars and people
-  const cars = [];
-  for (let i = 0; i < VEHICLES.length; i++) {
-    const def = r.bank.fromVox(`v:${i}:${i}`, buildVehicle(i, PAINTS[(i * 3) % PAINTS.length]), { mat: 2 });
-    cars.push({ def, x: cam.x - 200 + i * 34, y: cam.y + 40, a: -Math.PI / 2 + (i % 2) * 0.3 });
-  }
-  const people = [];
-  for (let i = 0; i < 10; i++) {
-    const app = randomAppearance(i * 977 + 3);
-    const pose = ['pistol', 'rifle', 'idle', 'bat', 'smg', 'shotgun', 'rocket', 'punch', 'wave', 's0'][i];
-    const def = r.bank.fromVox(`c:${i}`, buildCharacter(app, i % 2 ? 'w0' : 'idle', pose), { mat: 2 });
-    people.push({ def, x: cam.x - 120 + i * 24, y: cam.y - 30, a: i * 0.6 });
-  }
-  const keys = {};
-  addEventListener('keydown', (e) => (keys[e.code] = true));
-  addEventListener('keyup', (e) => (keys[e.code] = false));
-  let last = performance.now();
-  let t0 = last;
-  const frame = (now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    const sp = (keys.ShiftLeft ? 900 : 300) * dt;
-    if (keys.KeyW) cam.y -= sp; if (keys.KeyS) cam.y += sp; if (keys.KeyA) cam.x -= sp; if (keys.KeyD) cam.x += sp;
-    if (keys.KeyQ) cam.zoom *= 1.02; if (keys.KeyE) cam.zoom /= 1.02;
-    if (keys.KeyT) hour += dt * 2;
-    r.resize(innerWidth, innerHeight, devicePixelRatio || 1);
-    cam.setScreen(r.w, r.h);
+  const dyn = new InstanceWriter(16);
+  const lights = new Float32Array(12 * 2048);
+  let titleRunning = true;
+  const path = [[306, 250], [330, 300], [260, 330], [215, 300], [300, 420], [380, 360]].map(([x, y]) => [x * 16, y * 16]);
+  const t0 = performance.now();
+  const titleFrame = (now) => {
+    if (!titleRunning) return;
+    requestAnimationFrame(titleFrame);
+    const t = Math.max(0, (now - t0) / 1000);
+    const seg = (t / 28) % path.length;
+    const i = Math.floor(seg), f = seg - i;
+    const a = path[i], b = path[(i + 1) % path.length];
+    const s = f * f * (3 - 2 * f);
+    cam.x = a[0] + (b[0] - a[0]) * s;
+    cam.y = a[1] + (b[1] - a[1]) * s;
+    cam.zoom = 1.25 + Math.sin(t * 0.1) * 0.15;
+    renderer.resize(innerWidth, innerHeight, devicePixelRatio || 1);
+    cam.setScreen(renderer.w, renderer.h);
     cam.update();
-    const tod = timeOfDay(hour, { cloud: Number(q.get('cloud') || 0.25), rain: Number(q.get('rain') || 0) });
-    dyn.reset();
-    for (const c of cars) dyn.stack(c.def, c.x, c.y, 0, c.a, { flags: tod.night > 0.3 ? 1 : 0 });
-    for (const p of people) dyn.stack(p.def, p.x, p.y, 0, p.a);
-    // lights
-    let nL = 0;
+    const tod = timeOfDay(19.05 + Math.sin(t * 0.02) * 0.4, { cloud: 0.25 });
+    let n = 0;
     const [x0, y0, x1, y1] = cam.groundBounds(150);
-    const L = (x, y, z, rad, c, cone, occ = 1) => {
-      const o = nL * LIGHT_FLOATS;
-      lights[o] = x; lights[o + 1] = y; lights[o + 2] = z; lights[o + 3] = rad;
-      lights[o + 4] = c[0]; lights[o + 5] = c[1]; lights[o + 6] = c[2]; lights[o + 7] = occ;
-      lights[o + 8] = cone ? cone[0] : 0; lights[o + 9] = cone ? cone[1] : 0; lights[o + 10] = cone ? cone[2] : -2; lights[o + 11] = cone ? cone[3] : 0;
-      nL++;
-    };
-    const sl = tod.streetLights;
-    if (sl > 0.01) {
-      r.wg.forEachInCells(r.wg.lightGrid, x0, y0, x1, y1, (s) => {
-        if (s.off || nL > 4000) return;
-        const k = s.k === 'street' ? 0.6 : s.k === 'fire' ? 1.0 : s.k === 'blink' ? 0.4 : 0.5;
-        L(s.x, s.y, s.z, s.r, [s.c[0] * k * sl, s.c[1] * k * sl, s.c[2] * k * sl], null, s.k === 'street' ? 1 : 0);
-      });
-      for (const c of cars) {
-        const fx = Math.cos(c.a), fy = Math.sin(c.a);
-        L(c.x + fx * 20, c.y + fy * 20, 6, 150, [0.95 * sl, 0.88 * sl, 0.7 * sl], [fx, fy, 0.82, 0.95]);
-      }
-    }
-    r.render({ cam, tod, time: freeze ? 10 : (now - t0) / 1000, dyn, lights, nLights: nL, parts: null, fadePos: [cam.x, cam.y], wet: Number(q.get('rain') || 0) });
-    dbg.textContent = `pos ${(cam.x / 16) | 0},${(cam.y / 16) | 0}  hour ${hour.toFixed(1)}  zoom ${cam.zoom.toFixed(2)}\ninst ${r.stats.instances} lights ${r.stats.lights} chunks ${r.stats.chunks}  atlas layer ${r.atlas.layer}`;
-    window.__frames = (window.__frames || 0) + 1;
-    requestAnimationFrame(frame);
+    if (tod.streetLights > 0.01) renderer.wg.forEachInCells(renderer.wg.lightGrid, x0, y0, x1, y1, (L) => {
+      if (n >= 2000) return;
+      const k = (L.k === 'street' ? 0.95 : 0.5) * tod.streetLights;
+      const o = n * 12;
+      lights[o] = L.x; lights[o + 1] = L.y; lights[o + 2] = L.z; lights[o + 3] = L.r;
+      lights[o + 4] = L.c[0] * k; lights[o + 5] = L.c[1] * k; lights[o + 6] = L.c[2] * k; lights[o + 7] = L.k === 'street' ? 1 : 0;
+      lights[o + 8] = 0; lights[o + 9] = 0; lights[o + 10] = -2; lights[o + 11] = 0;
+      n++;
+    });
+    renderer.render({ cam, tod, time: t, dyn, lights, nLights: n, parts: null, fadePos: [0, 0], wet: 0, fade: Math.min(1, t * 0.8) });
   };
-  requestAnimationFrame(frame);
+  requestAnimationFrame(titleFrame);
+
+  let title = null;
+  function showTitle(error) {
+    title?.remove();
+    const name = profile.exists ? profile.name : store.get('sb_name', '');
+    const app = profile.exists && profile.app ? profile.app : store.get('sb_app', null);
+    title = el('div');
+    title.id = 'title';
+    title.innerHTML = `
+      <div class="col">
+        <div class="logo">SPRITE<span class="b">BOUND</span></div>
+        <div class="tagline">A cozy pixel city to cruise, explore and share.</div>
+        <div class="server"><span class="dot"></span>${esc(profile.server)} · ${profile.players}/${profile.max} online${profile.pvp ? '' : ' · peaceful server'}</div>
+        <div class="panel who"><canvas width="72" height="72"></canvas><div><div style="font-size:20px;font-weight:700" class="nm"></div><div class="muted mn"></div></div></div>
+        <button class="btn play">${name ? 'Play' : 'Create character'}</button>
+        <button class="btn secondary edit">Customize character</button>
+        <label class="check"><input type="checkbox" class="vc"> Proximity voice chat (microphone)</label>
+        <div class="row"><button class="btn secondary small set">Settings</button><button class="btn secondary small help">How to play</button></div>
+        <div class="err" style="color:var(--red);min-height:20px"></div>
+        <div class="panel motd">${esc(profile.motd || '')}</div>
+      </div>
+      <div class="foot">spritebound.world · WASD to move, E to drive, M for the map. Made with pixels and love.</div>`;
+    uiRoot.append(title);
+    title.querySelector('.nm').textContent = name || 'New in town';
+    title.querySelector('.mn').textContent = profile.exists ? `$${profile.money.toLocaleString('en-US')} in the bank` : 'Make yourself a character!';
+    if (app) drawPortrait(title.querySelector('.who canvas'), app);
+    else title.querySelector('.who').classList.add('hidden');
+    const vc = title.querySelector('.vc');
+    vc.checked = !!settings.voiceOn;
+    vc.onchange = () => { settings.voiceOn = vc.checked; saveSettings(); };
+    if (error) title.querySelector('.err').textContent = error;
+    const edit = () => openCreator(uiRoot, {
+      name, app, mode: profile.exists ? 'edit' : 'new', audio,
+      onSave: (n, a) => { store.set('sb_name', n); store.set('sb_app', a); profile.name = n; profile.app = a; profile.exists = profile.exists || false; pendingJoin = { name: n, app: a }; showTitle(); },
+      onCancel: () => {},
+    });
+    title.querySelector('.edit').onclick = () => { audio.start(); edit(); };
+    title.querySelector('.set').onclick = () => { audio.start(); ui.g = ui.g || { renderer, radio: { setContext() {} }, local: { car: null } }; ui.openSettings(); };
+    title.querySelector('.help').onclick = () => ui.openHelp();
+    title.querySelector('.play').onclick = async () => {
+      await audio.start();
+      const n = pendingJoin?.name || name;
+      const a = pendingJoin?.app || app;
+      if (!n) { edit(); return; }
+      if (settings.voiceOn) voice.enable();
+      title.querySelector('.play').disabled = true;
+      net.send({ t: 'join', name: n, app: sanitizeAppearance(a || randomAppearance(Date.now())) });
+    };
+  }
+  let pendingJoin = null;
+
+  net.on('deny', (m) => { if (!game && title) showTitle(m.m); });
+  net.on('welcome', (w) => {
+    store.set('sb_token', w.token);
+    store.set('sb_name', w.name);
+    store.set('sb_app', w.app);
+    titleRunning = false;
+    title?.remove();
+    ui.closeModal();
+    game = new Game({ renderer, world, net, audio, voice, ui, input, settings });
+    window.__game = game;
+    game.start(w);
+    if (settings.voiceOn && !voice.enabled) voice.enable();
+  });
+  window.__frames = 0;
+  const countFrames = () => { window.__frames++; requestAnimationFrame(countFrames); };
+  requestAnimationFrame(countFrames);
 }
-boot().catch((e) => { dbg.textContent = 'ERROR: ' + e.message; console.error(e); });
+
+boot().catch((e) => { console.error(e); fatal('Something went wrong while starting: ' + e.message); });
