@@ -23,7 +23,7 @@ export const WALL_COLORS = (() => {
 })();
 export const CONTAINER_COLORS = ['#c2463b', '#3170b8', '#e29d2e', '#41a05d', '#8d52b3', '#dcdcd2', '#2ca3a3', '#bb5f2c'];
 export const ROOF_COLORS = ['#b8523d', '#7f503b', '#5d6d80', '#607f50', '#4c4c55', '#cc764b', '#6d8292', '#41827c', '#8e8a83', '#7a8086', '#a69d8d', '#80878c'];
-export const FLAT_ROOF = ['#9d978e', '#8c9196', '#a59c8c', '#80868b'];
+export const FLAT_ROOF = ['#9d978e', '#8c9196', '#b5a58a', '#7a8189', '#b8826a', '#7f8f78', '#cbc3b2', '#646b75'];
 export const AWNING_COLORS = ['#d84a4a', '#407ed1', '#3c9c66', '#f2b63e', '#8c5ecb', '#e281b5', '#2c9f9f', '#f27e3e'];
 export const SHIP_COLORS = ['#7d2a2a', '#1f3b5c', '#2c4a2c', '#3a3a44'];
 

@@ -82,8 +82,8 @@ void main() {
     vec3 deep = vec3(0.10, 0.30, 0.50), shallow = vec3(0.22, 0.55, 0.72), pool = vec3(0.42, 0.82, 0.90);
     vec3 base = id == 0 ? deep : id == 1 ? shallow : pool;
     col = base * (0.86 + wave * 0.28);
-    float bands = fract(wave * 6.0 + t * 0.05);
-    if (bands > 0.93) col = mix(col, vec3(0.75, 0.9, 1.0), 0.35);
+    float bands = fract(wave * 5.0 + t * 0.04);
+    if (bands > 0.95) col = mix(col, vec3(0.7, 0.88, 1.0), 0.22);
     // shore foam: count land around
     float shore = 0.0;
     for (int k = 0; k < 8; k++) {
@@ -276,7 +276,7 @@ void main() {
         float k = hash12(vec2(h * 91.0, seed));
         vec3 warm = k < 0.55 ? vec3(1.0, 0.78, 0.45) : k < 0.8 ? vec3(1.0, 0.62, 0.32) : k < 0.94 ? vec3(0.85, 0.9, 1.0) : vec3(0.45, 0.6, 1.0) * (0.75 + 0.25 * sin(uTime * 7.0 + h * 40.0));
         float curtain = t.r > t.b + 0.15 ? 0.6 : 1.0;
-        emis = warm * 1.25 * curtain * uNight;
+        emis = warm * 0.8 * curtain * uNight;
         col = mix(col, warm * 0.6, uNight);
       }
     } else if (m >= 140) {
@@ -297,15 +297,30 @@ void main() {
     float edge = min(min(r.x, sz.x - r.x), min(r.y, sz.y - r.y));
     int rx = int(mod(floor(r.x), 32.0)), ry = int(mod(floor(r.y), 32.0));
     float hb = hash12(vec2(seed, 9.1));
-    int ox = hb < 0.6 ? 0 : 32, oy = 64;
+    float hk = hash12(vec2(seed, 2.3));
+    int ox = hb < 0.35 ? 0 : hb < 0.6 ? 32 : hb < 0.85 ? 96 : 0, oy = hb < 0.6 ? 64 : 96;
+    if (hb >= 0.85) { ox = 32; oy = 96; }
     if (style == 3 || style == 4) { ox = 32; oy = 96; }
     if (style == 7 || style == 17) { ox = 0; oy = 96; }
     if (style == 14) { ox = 0; oy = 64; }
     if (style == 15) { ox = 64; oy = 96; }
     vec4 t = texelFetch(uWalls, ivec3(ox + rx, oy + ry, style), 0);
     int m = int(t.a * 255.0 + 0.5);
-    vec3 roofTint = style == 14 ? wallCol : style == 15 ? vec3(1.0) : pal(rc % 4, 2);
+    vec3 roofTint = style == 14 ? wallCol : style == 15 ? vec3(1.0) : pal(int(hk * 8.0), 2);
     col = m >= 250 ? t.rgb * roofTint * 1.15 : m == 120 ? t.rgb * roofTint * 1.1 : t.rgb;
+    // membrane seams and skylights on larger roofs
+    if (style != 14 && style != 15 && style != 17) {
+      vec2 cell = floor(r / 48.0);
+      vec2 cf = mod(r, 48.0);
+      float hs = hash12(cell + seed * 0.37);
+      if (sz.x > 90.0 && sz.y > 70.0 && hs < 0.22 && cf.x > 14.0 && cf.x < 34.0 && cf.y > 18.0 && cf.y < 30.0 && edge > 8.0) {
+        bool frame = cf.x < 15.0 || cf.x > 33.0 || cf.y < 19.0 || cf.y > 29.0 || abs(cf.x - 24.0) < 0.6;
+        col = frame ? vec3(0.78, 0.8, 0.82) : mix(vec3(0.32, 0.45, 0.58), vec3(0.6, 0.75, 0.88), cf.y / 30.0 - 0.4);
+        if (!frame) emis = vec3(1.0, 0.85, 0.6) * 0.5 * uNight * step(0.4, hash12(cell + 3.0));
+      } else if (hk > 0.55 && (mod(r.x + 6.0, 40.0) < 1.0 || mod(r.y + 9.0, 56.0) < 1.0)) {
+        col *= 0.86;
+      }
+    }
     if (style == 15) {
       // cargo ship: rows of containers on deck
       vec2 cg = floor(r / vec2(24.0, 10.0));
@@ -431,6 +446,7 @@ void main() {
   if (t.a < 0.5) discard;
   if (vAlpha < 0.999 && bayer4(gl_FragCoord.xy) > vAlpha) discard;
   if (uShadowPass == 1) {
+    if (mod(floor(vParams.x / 64.0), 2.0) > 0.5) discard;
     oAlbedo = vec4(0.0, clamp(vZ / 64.0, 0.02, 1.0), 0.0, 1.0);
     return;
   }
@@ -637,7 +653,7 @@ void main() {
     // water: sun glints and light reflections
     vec2 g = floor(p.xy / 2.0);
     float sp2 = hash12(g + floor(uTime * 3.0));
-    float glint = step(0.986, sp2) * ndl * sunVis * cloud;
+    float glint = step(0.994, sp2) * ndl * sunVis * cloud;
     col += uSunCol * glint * 1.6;
     vec3 refl = texture(uLight, vUV + vec2(sin(uTime * 2.0 + p.y * 0.2) * 0.002, 0.012)).rgb;
     col += refl * 0.35;
