@@ -76,15 +76,13 @@ export function openCreator(root, { name = '', app, mode = 'new', onSave, onCanc
   stepper('Extra', 'acc', ACCESSORIES);
   swatch('Extra color', 'accColor', CLOTH);
 
-  const foot = el('div', 'spread');
-  foot.style.marginTop = '18px';
-  const err = el('div', 'muted');
-  const btns = el('div', 'row');
+  // actions live under the preview so they stay visible on short screens
+  const err = el('div', 'muted err');
+  const btns = el('div', 'actions');
   const cancel = el('button', 'btn secondary', mode === 'makeover' ? 'Keep my look' : 'Cancel');
   const save = el('button', 'btn', mode === 'new' ? "Let's go!" : 'Save');
-  btns.append(cancel, save);
-  foot.append(err, btns);
-  modal.append(foot);
+  btns.append(save, cancel);
+  left.append(err, btns);
   cancel.onclick = () => { close(); sfx(audio, 'close'); onCancel?.(); };
   if (mode === 'new' && !onCancel) cancel.classList.add('hidden');
   save.onclick = () => {

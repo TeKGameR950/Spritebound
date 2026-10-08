@@ -152,12 +152,13 @@ export class UI {
         if (poi && SHOPS[poi.type]?.needsCar) prompt = `<span class="kbd">E</span> ${SHOPS[poi.type].verb} at ${poi.name}`;
         else if (race) prompt = `<span class="kbd">E</span> Start race: ${race.name}`;
         else if (VEHICLES[L.car.model].key === 'taxi' && !g.job) prompt = `<span class="kbd">J</span> Start taxi fares`;
-      } else if (poi && !SHOPS[poi.type].needsCar) prompt = `<span class="kbd">E</span> ${SHOPS[poi.type].verb}: ${poi.name}`;
-      else if (L.mode === 'walk') {
-        for (const v of g.nearVehicles(L.x, L.y, 50)) {
+      } else if (L.mode === 'walk') {
+        // same order as the E key: a vehicle within reach wins over the shop
+        for (const v of g.nearVehicles(L.x, L.y, 70)) {
           const m = VEHICLES[v.model];
           if (!v.dead && Math.hypot(v.x - L.x, v.y - L.y) - m.len * 0.35 < 26) { prompt = `<span class="kbd">E</span> ${v.driver ? 'Borrow' : 'Drive'} the ${m.name}`; break; }
         }
+        if (!prompt && poi && !SHOPS[poi.type].needsCar && g.job?.kind !== poi.type) prompt = `<span class="kbd">E</span> ${SHOPS[poi.type].verb}: ${poi.name}`;
       }
     }
     if (prompt !== this.lastPrompt) {
@@ -374,10 +375,10 @@ export class UI {
   }
 
   // ------------------------------------------------------------------ modals
-  openModal(build, onClose) {
+  openModal(build, onClose, cls = '') {
     this.closeModal();
     const wrap = el('div', 'modal-wrap');
-    const box = el('div', 'panel modal');
+    const box = el('div', 'panel modal ' + cls);
     wrap.append(box);
     this.root.append(wrap);
     this.modal = { wrap, onClose };
@@ -458,7 +459,7 @@ export class UI {
       };
       this.shopRefresh = () => { if (this.modal) render(); };
       render();
-    }, () => { this.shopRefresh = null; });
+    }, () => { this.shopRefresh = null; }, 'shop');
   }
 
   openMakeover() {
@@ -525,15 +526,18 @@ export class UI {
       }
       box.append(list);
       box.append(el('p', 'muted', 'Only players close to you are listed. Voice volume and mute apply to proximity chat.'));
-    });
+    }, null, 'medium');
   }
 
   openMenu() {
     const g = this.g;
     this.openModal((box) => {
-      box.append(el('h2', null, 'Paused (the city keeps going!)'));
+      box.append(el('h2', null, 'Paused'));
+      const sub = el('p', 'muted', 'The city keeps going while you are here.');
+      sub.style.margin = '-8px 0 14px';
+      box.append(sub);
       const col = el('div');
-      col.style.cssText = 'display:flex;flex-direction:column;gap:10px;max-width:360px';
+      col.style.cssText = 'display:flex;flex-direction:column;gap:10px';
       const add = (label, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), label); b.onclick = fn; col.append(b); return b; };
       add('Resume', '', () => this.closeModal());
       add('Settings', 'secondary', () => this.openSettings());
@@ -542,7 +546,7 @@ export class UI {
       add(g.local.stats.passive ? 'Passive mode: ON (no PvP)' : 'Passive mode: OFF (PvP)', 'secondary', () => { g.net.send({ t: 'passive', on: !g.local.stats.passive }); this.closeModal(); });
       add('Leave Haven Bay', 'pink', () => location.reload());
       box.append(col);
-    });
+    }, null, 'narrow');
   }
 
   openHelp() {

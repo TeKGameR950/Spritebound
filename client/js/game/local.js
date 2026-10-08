@@ -280,7 +280,7 @@ export class Local {
   // ------------------------------------------------------------------ vehicles
   tryEnter() {
     const g = this.g;
-    if (this.pendingEnter > performance.now()) return;
+    if (this.pendingEnter > performance.now()) return true;
     let best = null, bd = 1e9;
     for (const v of g.nearVehicles(this.x, this.y, 70)) {
       if (v.dead) continue;
