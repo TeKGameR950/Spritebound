@@ -1,0 +1,26 @@
+{
+  "name": "spritebound",
+  "version": "1.0.0",
+  "description": "Spritebound: a cozy multiplayer top-down pixel city sandbox.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test tests/",
+    "bots": "node tools/bots.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TeKGameR950/Spritebound.git"
+  },
+  "homepage": "https://spritebound.world",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
