@@ -58,9 +58,13 @@ All passes are WebGL2.
 5. **Composite.** `albedo * (ambient + sun + lights) + emissive`, plus cloud shadows projected along the sun
    direction, water glints, and rain puddles that reflect the light buffer.
 6. **Particles.** Forward pass into the HDR target: smoke, sparks, rain, skid dust, fire, glows.
-7. **Bloom.** Dual Kawase filter (Bjorge, *Bandwidth-Efficient Rendering*, SIGGRAPH 2015): cheap, wide and
+7. **X-ray silhouettes.** The perspective camera lets tall buildings hide players in alleys, which is
+   geometrically right but bad for play. The local player, their car and other players are redrawn as a
+   flat tinted silhouette wherever something at least 10 units in front of them (in view distance) covers
+   them. The threshold ignores a sprite's own stacked slices.
+8. **Bloom.** Dual Kawase filter (Bjorge, *Bandwidth-Efficient Rendering*, SIGGRAPH 2015): cheap, wide and
    stable, which matters for small emissive pixels.
-8. **Tone mapping and grading.** ACES filmic fit (Narkowicz, 2015), then saturation, contrast, lift and gain
+9. **Tone mapping and grading.** ACES filmic fit (Narkowicz, 2015), then saturation, contrast, lift and gain
    from the time-of-day table, vignette and optional damage tint.
 
 ### Time of day
@@ -154,7 +158,12 @@ Everything is synthesized with Web Audio at runtime.
   unlink beyond 832 after a 1.5 second grace period, and a link lives at least 4 seconds. Each player has at
   most 8 links, nearest first, so bandwidth stays flat in crowds.
 - **Negotiation.** The perfect negotiation pattern from the WebRTC specification examples, with a
-  connection id per link so late signals from an old link are dropped.
+  connection id per link so late signals from an old link are dropped. Only the impolite peer makes the
+  first offer, with a single sendrecv transceiver; the polite peer attaches its microphone to that
+  transceiver before answering. When both sides offered at once, the polite side's implicit rollback
+  sometimes left Chromium's ICE gathering stalled with no local candidates (about one link in five in
+  testing). With one offerer, links connect in a single round trip. Mic changes swap the sender track
+  with `replaceTrack`, so they never renegotiate.
 - **Playback.** Each remote stream is attached to a muted `audio` element as well as Web Audio. Chromium
   does not feed a remote WebRTC stream into Web Audio unless a media element consumes it.
 - **Distance.** Full volume within 60 units, quadratic fade to silence at 580, stereo pan by horizontal
@@ -179,4 +188,6 @@ Everything is synthesized with Web Audio at runtime.
   carjacking and dev command gating.
 - `tools/play.mjs` drives the real client in headless Chromium: join, walk, enter and drive a car, drift,
   shoot, open the map, then night, storm and morning screenshots.
+- `tools/duo.mjs` runs two real clients: they meet, see each other, chat, connect proximity voice,
+  walk apart (link drops) and meet again (link returns).
 - `tools/bots.js` connects many headless clients for load and protocol checks.

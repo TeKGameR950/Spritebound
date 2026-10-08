@@ -150,11 +150,13 @@ node tools/map-preview.js 1337 map.png 2          # renders the generated city t
 With `DEV=1`, these chat commands are available: `/tp <tileX> <tileY>`, `/car [model]`, `/money <n>`,
 `/give <weapon>`, `/time <hour>`, `/weather clear|cloudy|rain|storm`, `/wanted <0-5>`.
 
-Browser tests use Playwright (`npm i --no-save playwright`):
+Browser tests use Playwright (`npm i --no-save playwright`). For `duo.mjs`, set `FAKE_MIC` to a WAV file to
+feed the fake microphone; Chromium's default fake device is silent in headless mode.
 
 ```sh
 node tools/play.mjs http://localhost:3000 out basic   # join, walk, drive, drift, shoot, open the map
 node tools/play.mjs http://localhost:3000 out night   # night, storm and morning screenshots (needs DEV=1)
+node tools/duo.mjs http://localhost:3000 out          # two players: sync, chat, voice link, unlink, relink
 node tools/shot.mjs http://localhost:3000 out.png      # single screenshot
 ```
 
