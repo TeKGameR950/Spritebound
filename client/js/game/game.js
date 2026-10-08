@@ -495,7 +495,7 @@ export class Game {
     this.hurtT = Math.max(0, (this.hurtT || 0) - dt);
     const lowHp = L.stats.hp < 30 && L.alive ? 0.35 + 0.15 * Math.sin(this.time * 6) : 0;
     r.render({
-      cam: this.cam, tod: this.tod, time: this.time, dyn: this.dyn, lights: this.scene.lights, nLights: this.scene.nLights, parts,
+      cam: this.cam, tod: this.tod, time: this.time, dyn: this.dyn, lights: this.scene.lights, nLights: this.scene.nLights, parts, xray: this.scene.xray,
       wet: this.wet, flash: this.flashT > 0 ? (this.flashT > 0.25 || (this.flashT > 0.1 && this.flashT < 0.16) ? 1.2 : 0) : 0,
       fade: this.fade, damage: Math.max(this.hurtT * 1.6, lowHp), fadePos: [L.x, L.y], satMul: L.mode === 'ko' ? 0.4 : 1,
     });

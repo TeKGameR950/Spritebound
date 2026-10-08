@@ -48,7 +48,9 @@ export class Camera {
     V[1] = u[0]; V[5] = u[1]; V[9] = u[2]; V[13] = -(u[0] * ex + u[1] * ey + u[2] * ez);
     V[2] = bk[0]; V[6] = bk[1]; V[10] = bk[2]; V[14] = -(bk[0] * ex + bk[1] * ey + bk[2] * ez);
     V[3] = 0; V[7] = 0; V[11] = 0; V[15] = 1;
-    mat4.perspective(this.proj, fov, this.w / this.h, Math.max(4, Hc * 0.05), Hc * 1.3 + 200);
+    this.near = Math.max(4, Hc * 0.05);
+    this.far = Hc * 1.3 + 200;
+    mat4.perspective(this.proj, fov, this.w / this.h, this.near, this.far);
     mat4.mul(this.vp, this.proj, this.view);
     mat4.invert(this.inv, this.vp);
   }

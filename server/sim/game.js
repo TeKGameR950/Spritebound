@@ -605,10 +605,12 @@ export class Game {
   devCommand(p, cmd, args) {
     const n = args.map(Number);
     switch (cmd) {
-      case 'tp':
+      case 'tp': {
         if (p.vehicle || !Number.isFinite(n[0]) || !Number.isFinite(n[1])) return true;
-        this.correct(p, n[0] * TILE + TILE / 2, n[1] * TILE + TILE / 2);
+        const spot = this.freeSpotNear(n[0] * TILE + TILE / 2, n[1] * TILE + TILE / 2);
+        if (spot) this.correct(p, spot[0], spot[1]);
         return true;
+      }
       case 'car': {
         const model = VEH_ID[args[0]] ?? VEH_ID.sports;
         const c = Math.cos(p.a), s = Math.sin(p.a);
@@ -647,6 +649,18 @@ export class Game {
         return true;
     }
     return false;
+  }
+
+  freeSpotNear(x, y) {
+    for (let r = 0; r < 40; r++) {
+      const steps = Math.max(1, r * 8);
+      for (let k = 0; k < steps; k++) {
+        const a = (k / steps) * Math.PI * 2;
+        const px = x + Math.cos(a) * r * TILE, py = y + Math.sin(a) * r * TILE;
+        if (this.cw.circleFree(px, py, 6, F.WALK)) return [px, py];
+      }
+    }
+    return null;
   }
 
   onPassive(p, on) {

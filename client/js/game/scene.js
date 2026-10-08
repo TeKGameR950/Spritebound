@@ -9,6 +9,8 @@ import { copAppearance } from './art-cache.js';
 const WEAPON_POSE = { pistol: 'pistol', smg: 'smg', shotgun: 'shotgun', rifle: 'rifle', rocket: 'rocket', grenade: 'grenade', bat: 'bat' };
 const WALK_FRAMES = ['w0', 'w1', 'w2', 'w3'];
 const SWING_FRAMES = ['s0', 'idle', 's2', 'idle'];
+const XRAY_SELF = [255, 226, 160];
+const XRAY_FRIEND = [126, 224, 163];
 
 export function vehFlags(f) {
   return (f & VF.LIGHTS ? FL.LIGHTS : 0) | (f & VF.BRAKE ? FL.BRAKE : 0) | (f & VF.SIREN ? FL.SIREN : 0) | (f & VF.REVERSE ? FL.REVERSE : 0);
@@ -21,6 +23,7 @@ export class SceneBuilder {
     this.pedApps = new Map();
     this.lights = new Float32Array(LIGHT_FLOATS * 4096);
     this.nLights = 0;
+    this.xray = [];
   }
 
   pedApp(info) {
@@ -44,10 +47,14 @@ export class SceneBuilder {
     const art = this.g.art;
     const c = art.character(app);
     const flags = o.hit ? FL.HIT : 0;
-    if (o.ko) { dyn.stack(art.ko(c), x, y, 0, a, { flags }); return; }
-    const z = o.z || 0;
-    dyn.stack(art.lower(c, o.lower || 'idle'), x, y, z, a, { flags, alpha: o.alpha });
-    dyn.stack(art.upper(c, o.upper || 'idle'), x, y, z, a, { flags, alpha: o.alpha });
+    const start = dyn.n;
+    if (o.ko) dyn.stack(art.ko(c), x, y, 0, a, { flags });
+    else {
+      const z = o.z || 0;
+      dyn.stack(art.lower(c, o.lower || 'idle'), x, y, z, a, { flags, alpha: o.alpha });
+      dyn.stack(art.upper(c, o.upper || 'idle'), x, y, z, a, { flags, alpha: o.alpha });
+    }
+    if (o.xray) this.xray.push({ s: start, e: dyn.n, c: o.xray });
   }
 
   upperFor(weaponKey, s) {
@@ -68,6 +75,7 @@ export class SceneBuilder {
     const L = g.local;
     const tod = g.tod;
     this.nLights = 0;
+    this.xray.length = 0;
     const [x0, y0, x1, y1] = view;
     const inView = (x, y, m = 80) => x > x0 - m && x < x1 + m && y > y0 - m && y < y1 + m;
     const night = tod.streetLights;
@@ -78,7 +86,9 @@ export class SceneBuilder {
       const upper = this.upperFor(w.key, { punch: L.anim.punch, swing: L.anim.swing, throw: L.anim.throw, wave: L.anim.wave, aiming: L.aimingT > 0, moving: L.moving, phase: L.anim.phase });
       const lower = L.moving ? WALK_FRAMES[Math.floor(L.anim.phase) % 4] : 'idle';
       const aimA = L.aimingT > 0 || L.anim.punch || L.anim.swing ? L.aim : L.a;
-      this.character(dyn, g.app, L.x, L.y, L.mode === 'ko' ? L.a : aimA, { lower, upper, ko: L.mode === 'ko', z: L.swim ? -6 : 0 });
+      this.character(dyn, g.app, L.x, L.y, L.mode === 'ko' ? L.a : aimA, { lower, upper, ko: L.mode === 'ko', z: L.swim ? -6 : 0, xray: XRAY_SELF });
+      // a faint personal glow keeps the player readable on dark streets
+      if (night > 0.05) this.light(L.x, L.y, 26, 56, [0.2 * night, 0.18 * night, 0.15 * night]);
     }
 
     // ---------------------------------------------------------------- remote players
@@ -96,7 +106,7 @@ export class SceneBuilder {
       const w = WEAPONS[s.weapon] || WEAPONS[0];
       const moving = sp > 10;
       const upper = this.upperFor(w.key, { punch: e.punchAnim, swing: e.swingAnim, throw: 0, wave: e.waveAnim || (s.flags & PF.WAVE ? 1 : 0), aiming: s.flags & PF.AIMING, moving, phase: e.phase });
-      this.character(dyn, info.app, s.x, s.y, s.mode === MODE.KO ? s.a : (s.flags & PF.AIMING ? s.aim : s.a), { lower: moving ? WALK_FRAMES[Math.floor(e.phase) % 4] : 'idle', upper, ko: s.mode === MODE.KO, z: s.mode === MODE.SWIM ? -6 : 0 });
+      this.character(dyn, info.app, s.x, s.y, s.mode === MODE.KO ? s.a : (s.flags & PF.AIMING ? s.aim : s.a), { lower: moving ? WALK_FRAMES[Math.floor(e.phase) % 4] : 'idle', upper, ko: s.mode === MODE.KO, z: s.mode === MODE.SWIM ? -6 : 0, xray: XRAY_FRIEND });
     }
 
     // ---------------------------------------------------------------- pedestrians
@@ -169,7 +179,9 @@ export class SceneBuilder {
     }
     if (L.car) {
       const c = L.car;
+      const start = dyn.n;
       drawVehicle(c.id, c.model, c.color, c.x, c.y, c.a, c.flags | 0, c.hp, false, g.app, c.vx, c.vy, c.slip);
+      if (dyn.n > start) this.xray.push({ s: start, e: dyn.n, c: XRAY_SELF });
     }
 
     // ---------------------------------------------------------------- items

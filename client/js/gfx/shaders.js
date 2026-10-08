@@ -475,6 +475,26 @@ void main() {
 }
 `;
 
+// Silhouettes of characters behind buildings, drawn with the sprite vertex shader after compositing.
+export const xrayFS = HEAD + COMMON + `
+in vec3 vUV;
+in vec4 vTint;
+uniform sampler2DArray uAtlas;
+uniform sampler2D uDepth;
+uniform vec2 uNearFar;
+uniform float uAlpha;
+out vec4 oCol;
+float viewDist(float d) { return uNearFar.x * uNearFar.y / (uNearFar.y - d * (uNearFar.y - uNearFar.x)); }
+void main() {
+  vec2 ts = vec2(textureSize(uAtlas, 0).xy);
+  if (texture(uAtlas, vec3(pixelUV(vUV.xy, ts), vUV.z)).a < 0.5) discard;
+  // only real occluders count; a sprite's own upper slices sit a few units in front of its lower ones
+  float front = viewDist(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r);
+  if (viewDist(gl_FragCoord.z) - front < 10.0) discard;
+  oCol = vec4(vTint.rgb, uAlpha);
+}
+`;
+
 // ------------------------------------------------------------------ fullscreen helpers
 export const fsVS = HEAD + `
 layout(location=0) in vec2 aPos;

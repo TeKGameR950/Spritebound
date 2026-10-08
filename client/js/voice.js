@@ -127,7 +127,7 @@ export class VoiceChat {
     const old = this.peers.get(m.link);
     if (old) this.close(old);
     const pc = new RTCPeerConnection({ iceServers: m.ice || [], bundlePolicy: 'max-bundle' });
-    const p = { id: m.link, cid: m.cid, polite: m.polite, pc, makingOffer: false, ignoreOffer: false, srdAnswerPending: false, restarts: 0, timer: 0, closed: false, sendTx: null, audio: null };
+    const p = { id: m.link, cid: m.cid, polite: m.polite, pc, makingOffer: false, ignoreOffer: false, srdAnswerPending: false, restarts: 0, timer: 0, closed: false, tx: null, audio: null };
     this.peers.set(m.link, p);
     const sig = (d) => this.net.send({ t: 'rtc', to: p.id, cid: p.cid, d });
     p.sig = sig;
@@ -147,14 +147,20 @@ export class VoiceChat {
       else if (s === 'failed') this.restart(p);
       else if (s === 'disconnected') p.timer = setTimeout(() => pc.iceConnectionState === 'disconnected' && this.restart(p), 3000);
     };
-    // receive-only peers still need an m-line to get audio when we have no mic
-    if (this.mic) this.addMic(p);
-    else pc.addTransceiver('audio', { direction: 'recvonly' });
+    // Only the impolite side offers, with one sendrecv transceiver. The polite side attaches its mic to
+    // that transceiver before answering. Simultaneous offers are legal under perfect negotiation, but the
+    // implicit rollback they cause sometimes stalls ICE gathering in Chromium.
+    if (!p.polite) {
+      p.tx = pc.addTransceiver('audio', { direction: 'sendrecv', streams: this.mic ? [this.mic.stream] : [] });
+      this.addMic(p);
+    }
   }
 
+  // Mic changes only swap the sender track, so they never renegotiate.
   addMic(p) {
-    if (!this.mic || p.sendTx || p.closed) return;
-    p.sendTx = p.pc.addTransceiver(this.mic.track, { direction: 'sendonly', streams: [this.mic.stream], sendEncodings: [{ maxBitrate: 28000 }] });
+    if (!this.mic || !p.tx || p.closed || p.tx.sender.track) return;
+    p.tx.sender.replaceTrack(this.mic.track).catch(() => {});
+    p.tx.sender.setStreams?.(this.mic.stream);
   }
 
   restart(p) {
@@ -176,6 +182,10 @@ export class VoiceChat {
         p.srdAnswerPending = false;
         if (p.closed) return;
         if (description.type === 'offer') {
+          if (!p.tx) {
+            p.tx = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio') || null;
+            if (p.tx) { p.tx.direction = 'sendrecv'; this.addMic(p); }
+          }
           await pc.setLocalDescription();
           if (!p.closed) p.sig({ description: pc.localDescription.toJSON() });
         }

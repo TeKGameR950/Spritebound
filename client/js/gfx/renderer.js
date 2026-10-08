@@ -24,6 +24,7 @@ export class Renderer {
       decal: program(gl, 'decal', SH.decalVS, SH.decalFS, A),
       building: program(gl, 'building', SH.buildingVS, SH.buildingFS, A),
       sprite: program(gl, 'sprite', SH.spriteVS, SH.spriteFS, A),
+      xray: program(gl, 'xray', SH.spriteVS, SH.xrayFS, A),
       sun: program(gl, 'sun', SH.fsVS, SH.sunShadowFS, A),
       light: program(gl, 'light', SH.lightVS, SH.lightFS, A),
       composite: program(gl, 'composite', SH.fsVS, SH.compositeFS, A),
@@ -55,6 +56,14 @@ export class Renderer {
     this.dynVao = gl.createVertexArray();
     gl.bindVertexArray(this.dynVao);
     setupSpriteAttribs(gl, this.quadBuf, this.dynBuf);
+    this.xrayBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.xrayBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, 512 * INST_BYTES, gl.DYNAMIC_DRAW);
+    this.xrayCap = 512;
+    this.xrayData = new Float32Array(512 * 16);
+    this.xrayVao = gl.createVertexArray();
+    gl.bindVertexArray(this.xrayVao);
+    setupSpriteAttribs(gl, this.quadBuf, this.xrayBuf);
 
     // lights
     this.lightBuf = gl.createBuffer();
@@ -385,6 +394,7 @@ export class Renderer {
       gl.disable(gl.BLEND);
       gl.disable(gl.DEPTH_TEST);
     }
+    if (s.xray && s.xray.length) this.drawXray(s, cam);
 
     // ---------------------------------------------------------------- bloom
     const B = T.bloom;
@@ -443,6 +453,50 @@ export class Renderer {
     gl.bindVertexArray(this.fsVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
+  }
+
+  // Characters hidden behind buildings or canopies get a flat tinted silhouette, so players never lose
+  // sight of themselves or friends in alleys.
+  drawXray(s, cam) {
+    const gl = this.gl;
+    const src = s.dyn.f32;
+    let n = 0;
+    for (const r of s.xray) n += r.e - r.s;
+    if (n > this.xrayCap) {
+      this.xrayCap = Math.ceil(n * 1.5);
+      this.xrayData = new Float32Array(this.xrayCap * 16);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.xrayBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, this.xrayCap * INST_BYTES, gl.DYNAMIC_DRAW);
+    }
+    const out = this.xrayData;
+    const u8 = new Uint8Array(out.buffer);
+    let k = 0;
+    for (const r of s.xray) {
+      out.set(src.subarray(r.s * 16, r.e * 16), k * 16);
+      for (let i = k; i < k + r.e - r.s; i++) {
+        const b = i * INST_BYTES + 44;
+        u8[b] = r.c[0]; u8[b + 1] = r.c[1]; u8[b + 2] = r.c[2]; u8[b + 3] = 255;
+      }
+      k += r.e - r.s;
+    }
+    const p = this.p.xray;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.t.scene.fb);
+    gl.viewport(0, 0, this.w, this.h);
+    gl.useProgram(p.p);
+    gl.uniformMatrix4fv(p.u.uVP, false, cam.vp);
+    this.texA(p, 'uAtlas', 0, this.atlas.tex);
+    this.tex(p, 'uDepth', 1, this.t.gbuf.depth);
+    gl.uniform2f(p.u.uNearFar, cam.near, cam.far);
+    gl.uniform1f(p.u.uAlpha, 0.55);
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.xrayBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, out.subarray(0, n * 16));
+    gl.bindVertexArray(this.xrayVao);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
+    gl.disable(gl.BLEND);
   }
 
   drawInstancedOffset(vao, buf, offset, count) {

@@ -5,8 +5,8 @@ export const POI_STYLE = {
   gunshop: ['#ff6b6b', 'G', 'Outfitters'], clothes: ['#ff86bd', 'T', 'Tailor'], respray: ['#62c3ff', 'R', 'Respray'],
   pizza: ['#ffb347', 'P', 'Pizza job'], taxi: ['#ffd84a', '$', 'Taxi job'], clinic: ['#ff5050', '+', 'Clinic'],
   police: ['#6aa0ff', '*', 'Police'], cafe: ['#e9b98a', 'C', 'Cafe'], gas: ['#7ee0a3', 'F', 'Gas & repair'],
-  dealer: ['#ffe066', 'D', 'Car dealer'], arcade: ['#c38bff', 'A', 'Arcade'], diner: ['#ff7a9c', 'D', 'Diner'],
-  hotel: ['#ffd27a', 'H', 'Hotel'], cityhall: ['#fff1c4', 'H', 'City Hall'], lighthouse: ['#fff6a0', 'L', 'Lighthouse'], ferris: ['#ffb3d5', 'C', 'Carousel'],
+  dealer: ['#ffe066', 'V', 'Car dealer'], arcade: ['#c38bff', 'A', 'Arcade'], diner: ['#ff7a9c', 'D', 'Diner'],
+  hotel: ['#ffd27a', 'H', 'Hotel'], cityhall: ['#fff1c4', '#', 'City Hall · leaderboards'], lighthouse: ['#fff6a0', 'L', 'Lighthouse'], ferris: ['#ffb3d5', 'C', 'Carousel'],
 };
 
 function hexToRgb(h) {
@@ -154,6 +154,9 @@ export function openBigMap(root, g, minimap, onClose) {
     s.append(sw, document.createTextNode(' ' + st[2]));
     legend.append(s);
   }
+  const race = el('span');
+  race.append(el('span', 'kbd checker', ' '), document.createTextNode(' Race start'));
+  legend.append(race);
   legend.append(el('div', 'foot', `Sprites found: ${g.collected.size}/${g.world.collectibles.length}`));
   legend.append(el('div', 'foot', 'Click the map to set a waypoint. M or Esc closes it.'));
   panel.append(legend);
@@ -181,10 +184,12 @@ export function openBigMap(root, g, minimap, onClose) {
       ctx.fillRect((s.x / TILE) * 2 - 2, (s.y / TILE) * 2 - 2, 4, 4);
     }
     for (const r of g.races || []) {
-      const [x, y] = r.cps[0];
-      ctx.fillStyle = '#1b1d2a'; ctx.fillRect((x / TILE) * 2 - 9, (y / TILE) * 2 - 9, 18, 18);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect((x / TILE) * 2 - 7, (y / TILE) * 2 - 7, 14, 14);
-      ctx.fillStyle = '#1b1d2a'; ctx.fillText('R', (x / TILE) * 2, (y / TILE) * 2 + 1);
+      const x = (r.cps[0][0] / TILE) * 2, y = (r.cps[0][1] / TILE) * 2;
+      ctx.fillStyle = '#1b1d2a'; ctx.fillRect(x - 9, y - 9, 18, 18);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        ctx.fillStyle = (i + j) % 2 ? '#1b1d2a' : '#ffffff';
+        ctx.fillRect(x - 7 + i * 3.5, y - 7 + j * 3.5, 3.5, 3.5);
+      }
     }
     for (const e of g.state.players.map.values()) {
       ctx.fillStyle = '#7ee0a3';
