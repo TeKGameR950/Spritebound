@@ -118,8 +118,19 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024, perMessageDeflate: false });
+const perIp = new Map();
 wss.on('connection', (ws, req) => {
   const ip = config.trustProxy ? (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress : req.socket.remoteAddress;
+  const n = perIp.get(ip) || 0;
+  if (n >= config.maxConnPerIp) {
+    ws.send(JSON.stringify({ t: 'kick', m: 'Too many connections from your network.' }));
+    return ws.close();
+  }
+  perIp.set(ip, n + 1);
+  ws.on('close', () => {
+    const left = (perIp.get(ip) || 1) - 1;
+    if (left > 0) perIp.set(ip, left); else perIp.delete(ip);
+  });
   game.connect(ws, ip);
 });
 

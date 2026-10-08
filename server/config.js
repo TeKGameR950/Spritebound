@@ -9,6 +9,7 @@ export const config = {
   serverName: env.SERVER_NAME || 'Haven Bay',
   motd: env.MOTD || 'Welcome to Haven Bay! Be kind, have fun.',
   maxPlayers: num(env.MAX_PLAYERS, 48),
+  maxConnPerIp: num(env.MAX_CONN_PER_IP, 8),
   pvp: bool(env.PVP, true),
   dataDir: env.DATA_DIR || 'data',
   // Proximity voice: STUN by default; TURN is optional and strongly recommended in production.

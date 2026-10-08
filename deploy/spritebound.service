@@ -1,0 +1,29 @@
+[Unit]
+Description=Spritebound game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spritebound
+WorkingDirectory=/opt/spritebound
+ExecStart=/usr/bin/node server/index.js
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=TRUST_PROXY=true
+Environment=DATA_DIR=/var/lib/spritebound
+# Environment=TURN_URLS=turn:turn.spritebound.world:3478
+# Environment=TURN_SECRET=change-me
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+StateDirectory=spritebound
+ReadWritePaths=/var/lib/spritebound
+
+[Install]
+WantedBy=multi-user.target
