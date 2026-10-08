@@ -26,6 +26,9 @@ function join(g, name = 'Tester') {
   msg({ t: 'hello', v: PROTOCOL_VERSION });
   msg({ t: 'join', name, app: {} });
   const p = [...g.players.values()].find((q) => q.name === name);
+  // spawn points are random; downtown keeps traffic and crowd counts stable
+  const hall = world.pois.find((q) => q.type === 'cityhall');
+  p.x = hall.x; p.y = hall.y;
   return { ws, msg, p };
 }
 
