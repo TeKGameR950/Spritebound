@@ -143,6 +143,7 @@ changed, and on shutdown (SIGINT or SIGTERM). Back up that file.
 ```sh
 DEV=1 npm run dev        # restarts on server changes; the client reloads on refresh
 npm test                 # simulation tests: traffic, peds, police, shops, carjacking, dev commands
+MAX_CONN_PER_IP=64 npm start                       # raise the per-IP cap before running many local bots
 node tools/bots.js 16 ws://localhost:3000/ws 60   # 16 headless bots for a minute, prints traffic stats
 node tools/map-preview.js 1337 map.png 2          # renders the generated city to a PNG
 ```
@@ -157,6 +158,7 @@ feed the fake microphone; Chromium's default fake device is silent in headless m
 node tools/play.mjs http://localhost:3000 out basic   # join, walk, drive, drift, shoot, open the map
 node tools/play.mjs http://localhost:3000 out night   # night, storm and morning screenshots (needs DEV=1)
 node tools/duo.mjs http://localhost:3000 out          # two players: sync, chat, voice link, unlink, relink
+node tools/audio-probe.mjs http://localhost:3000      # plays every sound effect, reports levels
 node tools/shot.mjs http://localhost:3000 out.png      # single screenshot
 ```
 

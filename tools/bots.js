@@ -34,6 +34,7 @@ function bot(i) {
       else if (m.t === 'note' || m.t === 'deny' || m.t === 'kick') stats.notes.push(m.m);
     });
     ws.on('error', (e) => { stats.errors++; console.error('bot error', e.message); });
+    ws.on('close', () => { clearInterval(iv); resolve(); });
     const iv = setInterval(() => {
       if (!me) return;
       a += (Math.random() - 0.5) * 0.4;

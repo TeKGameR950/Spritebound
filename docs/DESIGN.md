@@ -190,4 +190,7 @@ Everything is synthesized with Web Audio at runtime.
   shoot, open the map, then night, storm and morning screenshots.
 - `tools/duo.mjs` runs two real clients: they meet, see each other, chat, connect proximity voice,
   walk apart (link drops) and meet again (link returns).
-- `tools/bots.js` connects many headless clients for load and protocol checks.
+- `tools/bots.js` connects many headless clients for load and protocol checks. With 32 bots walking
+  around, the server used 6 to 17 percent of one core and about 135 MB of memory, and each client received
+  about 17 KB/s.
+- `tools/audio-probe.mjs` plays every synthesized sound in the browser and fails on silence or errors.

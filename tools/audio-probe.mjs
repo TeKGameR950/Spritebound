@@ -54,3 +54,4 @@ console.log(JSON.stringify(result, null, 1));
 console.log('--- console (' + logs.length + ')');
 for (const l of logs.slice(0, 20)) console.log(l.slice(0, 300));
 await browser.close();
+if (result.failed.length || result.silent.length || logs.length) process.exitCode = 1;
